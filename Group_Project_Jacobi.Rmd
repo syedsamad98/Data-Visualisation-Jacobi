@@ -1,0 +1,198 @@
+---
+title: "Group Project - Jacobi"
+author: "Syed Samad, Marada Shanmukha Prajwal, Precious Omoniyi"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load the required libraries
+library(readxl)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+
+```
+
+## World Happiness Index and CO2 Emissions
+
+The World Happiness Index measures countries by "happiness" and assigns an overall Happiness Score based on factors such as GDP per capita, Social Support, Life Expectancy, Freedom, Corruption etc. 
+
+However, it does not take into account environmental factors such as CO2 emissions and energy consumption. The aim here is to verify if there is any correlation between a country's happiness index and its energy consumption and environment.
+
+The null hypothesis here is that countries with a higher happiness score would ideally have lower CO2 emissions attributing to use of renewable sources of energy and a high environmental quality which could in turn impact overall happiness.
+
+We first take a look at the happiness index of countries worldwide at a glance using the plot below. The data for the happiness index, CO2 emissions per capita and energy sources is from 2022 for the purpose of this exercise.
+
+```{r first plot}
+merged_data <- read.csv("data/Happiness_CO2_2022_.csv")
+
+# Get world map data
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Merge world map data with happiness data by country
+world_happiness <- world %>%
+  left_join(merged_data, by = c("name" = "Country"))
+
+
+# Create the plot
+ggplot(data = world_happiness) +
+  geom_sf(aes(fill = `Happiness.score`)) +  # Use the Happiness Score for fill
+  scale_fill_viridis_c(option = "plasma", na.value = "lightgray", name = "Happiness Index") +
+  theme_minimal() +
+  labs(title = "World Happiness Index (2022)",
+       subtitle = "Brighter colors represent higher Happiness Index",
+       caption = "Data: World Happiness Report") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 20, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    plot.caption = element_text(size = 8),
+    legend.position = "right"
+  )
+```
+
+## Plotting Happiness Score against CO2 emissions per capita
+
+The scatter plot below shows the relationship between the two parameters
+
+```{r second plot}
+ggplot(merged_data, aes(x = `CO2.emissions.per.capita`, y = `Happiness.score`)) +
+  geom_point(aes(color = `CO2.emissions.per.capita`)) +
+  scale_color_viridis_c(option = "plasma") +  # Apply Viridis color palette
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Linear regression line
+  theme_minimal() +
+  labs(title = "Happiness Score vs. CO2 Emissions per Capita",
+       x = "CO2 Emissions per Capita",
+       y = "Happiness Score")
+```
+
+
+At first glance, there appears to be a slight positive correlation between CO2 emission per capita and Happiness Score. We take a closer look by splitting the data by continents with the most data points.
+
+
+
+```{r}
+library(countrycode)
+
+merged_data$Continent <- countrycode(sourcevar = merged_data$Country, 
+                                     origin = "country.name", 
+                                     destination = "continent")
+
+# Filter for specific continents: Americas, Asia, Europe, and Africa
+filtered_data <- merged_data %>%
+  filter(Continent %in% c("Americas", "Asia", "Europe", "Africa"))
+
+# Create scatter plot with slope line
+ggplot(filtered_data, aes(x = `CO2.emissions.per.capita`, y = `Happiness.score`)) +
+  geom_point(aes(color = `CO2.emissions.per.capita`), size = 3, alpha = 0.7) +  # Scatter plot points
+  scale_color_viridis_c(option = "plasma") +  # Apply Viridis palette for color
+  geom_smooth(method = "lm", se = FALSE, color = "blue", linetype = "dashed") +  # Add regression line
+  facet_wrap(~Continent) +  # Create facets for each continent
+  theme_minimal() +
+  labs(title = "Happiness vs. CO2 Emissions by Continent",
+       x = "CO2 Emissions per Capita",
+       y = "Happiness Score",
+       color = "CO2 Emissions") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Adjust x-axis text for readability
+```
+
+
+We still observe a slight positive correlation across Africa, Amercias, Asia as well as Europe.
+
+
+```{r fourth plot}
+# Top 10 countries by CO2 emissions
+top10_co2 <- merged_data %>%
+  arrange(desc(`CO2.emissions.per.capita`)) %>%
+  slice(1:10)
+
+# Plot for Top 10 countries by CO2 emissions and Happiness Score
+top10_plot <- ggplot(top10_co2, aes(x = reorder(Country, `CO2.emissions.per.capita`), y = `CO2.emissions.per.capita`)) +
+  geom_col(aes(fill = `Happiness.score`)) +
+  scale_fill_viridis_c(option = "plasma") +  # Apply Viridis palette for colors
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top 10 Countries by CO2 Emissions with Happiness Scores",
+       x = "Country",
+       y = "CO2 Emissions per Capita",
+       fill = "Happiness Score")
+
+# Bottom 10 countries by least CO2 emissions (ascending order)
+bottom10_co2 <- merged_data %>%
+  arrange(`CO2.emissions.per.capita`) %>%  # Arrange in ascending order to get countries with least emissions
+  filter(`CO2.emissions.per.capita` > 0) %>%  # Exclude countries with zero CO2 emissions if any
+  slice(1:10)
+
+# Plot for Bottom 10 countries by least CO2 emissions and Happiness Score
+bottom10_plot <- ggplot(bottom10_co2, aes(x = reorder(Country, -`CO2.emissions.per.capita`), y = `CO2.emissions.per.capita`)) +
+  geom_col(aes(fill = `Happiness.score`)) +
+  scale_fill_viridis_c(option = "plasma") +  # Apply Viridis palette for colors
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top 10 Countries by least CO2 Emissions with Happiness Scores",
+       x = "Country",
+       y = "CO2 Emissions per Capita",
+       fill = "Happiness Score")
+
+# Display both plots
+print(top10_plot)
+print(bottom10_plot)
+```
+
+
+
+We now dive a step deeper to take a look at the top 10 and the bottom 10 countries in the world in terms of CO2 emissions per capita along with their happiness score to see if there is a clear pattern. As we can see, there is a lot of variance in the happiness scores of these countries and there is no clear pattern that indicates a strong correlation of a country's happiness score to its CO2 emissions per capita. 
+
+
+
+
+```{r}
+# Load necessary libraries
+library(tidyr)
+
+# Read the datasets
+energy_data <- read.csv("data/owid energy data.csv")
+happiness_data <- read.csv("data/Happiness_CO2_2022_.csv")
+
+# Step 1: Filter happiness data for top 5 happiest countries in 2022
+top_5_happiest <- happiness_data %>% arrange(desc(Happiness.score)) %>% head(5)
+
+# Step 2: Extract energy data for the year 2022 and filter for the top happiest countries
+energy_data_2022 <- energy_data %>% filter(year == 2022)
+top_5_energy_2022 <- energy_data_2022 %>% filter(country %in% top_5_happiest$Country)
+
+# Step 3: Select only columns that have 'consumption' in their names, excluding 'primary_energy_consumption' and 'low_carbon_consumption'
+consumption_columns <- grep("consumption", names(energy_data), value = TRUE)
+consumption_columns <- setdiff(consumption_columns, c("primary_energy_consumption", "low_carbon_consumption", "fossil_fuel_consumption", "renewables_consumption"))
+
+# Step 4: Calculate average energy consumption for top 5 happiest countries
+top_5_average_energy <- top_5_energy_2022 %>%
+  select(country, all_of(consumption_columns)) %>%
+  pivot_longer(cols = -country, names_to = "energy_source", values_to = "consumption") %>%
+  filter(!is.na(consumption) & consumption > 0) %>%  # Exclude NA and zero consumption values
+  group_by(energy_source) %>%
+  summarise(average_consumption = mean(consumption, na.rm = TRUE)) %>%
+  arrange(desc(average_consumption))
+
+# Step 5: Create bar plot for average energy consumption of each energy source for the top 5 happiest countries
+top_5_plot <- ggplot(top_5_average_energy, aes(x = reorder(energy_source, -average_consumption), y = average_consumption, fill = energy_source)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Energy Consumption by Source - Top 5 Happiest Countries (2022)", x = "Energy Source", y = "Average Consumption") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1))
+
+# Display the plot
+print(top_5_plot)
+
+```
+
+The final step is to look at the energy source mix for the top 5 happiest countries. Clearly, oil and gas lead by a significant margin against renewable sources of energy for these countries.
+
+This, in part, goes against our null hypothesis where the assumption was the happiest countries would likely largely use renewable sources of energy. 
+
+In conclusion, there isn't a strong correlation between the happiness index of a country and it's CO2 emissions per capita which indicates that a country with low emissions isn't certainly likely to also be happy.
